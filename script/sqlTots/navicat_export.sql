@@ -11,7 +11,7 @@
  Target Server Version : 80025 (8.0.25)
  File Encoding         : 65001
 
- Date: 08/01/2025 22:22:42
+ Date: 10/01/2025 06:01:05
 */
 
 SET NAMES utf8mb4;
@@ -80,13 +80,13 @@ CREATE TABLE `UserRoles`  (
 -- ----------------------------
 DROP TABLE IF EXISTS `article_categories`;
 CREATE TABLE `article_categories`  (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `parent_id` int NULL DEFAULT NULL,
-  `level` tinyint NOT NULL,
-  `slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id` int NOT NULL AUTO_INCREMENT COMMENT '分类id',
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '分类名',
+  `parent_id` int NULL DEFAULT NULL COMMENT '上级分类id',
+  `level` tinyint NOT NULL COMMENT '分类的级别 ',
+  `slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '分类的详细信息',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '分类的创建时间',
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '分类的更新时间',
   PRIMARY KEY (`id`, `name`) USING BTREE,
   UNIQUE INDEX `cayegories_name`(`name` ASC) USING BTREE COMMENT '唯一',
   INDEX `id`(`id` ASC) USING BTREE
@@ -97,10 +97,10 @@ CREATE TABLE `article_categories`  (
 -- ----------------------------
 DROP TABLE IF EXISTS `comment_likes`;
 CREATE TABLE `comment_likes`  (
-  `like_id` int NOT NULL AUTO_INCREMENT,
-  `user_id` char(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `comment_id` int NOT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `like_id` int NOT NULL AUTO_INCREMENT COMMENT '喜欢的评论Id',
+  `user_id` char(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户名创建评论的',
+  `comment_id` int NOT NULL COMMENT '喜欢的评论id',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '评论的创建时间',
   PRIMARY KEY (`like_id`) USING BTREE,
   UNIQUE INDEX `user_id`(`user_id` ASC, `comment_id` ASC) USING BTREE,
   CONSTRAINT `fk_user_id` FOREIGN KEY (`user_id`) REFERENCES `user_info` (`user_id`) ON DELETE CASCADE ON UPDATE RESTRICT
@@ -111,16 +111,16 @@ CREATE TABLE `comment_likes`  (
 -- ----------------------------
 DROP TABLE IF EXISTS `comments`;
 CREATE TABLE `comments`  (
-  `comment_id` int UNSIGNED NOT NULL AUTO_INCREMENT,
-  `article_id` int NOT NULL,
-  `user_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `parent_id` int UNSIGNED NULL DEFAULT 0,
-  `content` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `created_at` datetime NULL DEFAULT NULL,
-  `updated_at` datetime NULL DEFAULT NULL,
-  `status` enum('pending','approved','rejected') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT 'pending',
-  `like_count` int UNSIGNED NULL DEFAULT 0,
-  `reply_count` int UNSIGNED NULL DEFAULT 0,
+  `comment_id` int UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '评论的id',
+  `article_id` int NOT NULL COMMENT '文章的id',
+  `user_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户的id',
+  `parent_id` int UNSIGNED NULL DEFAULT 0 COMMENT '父级id',
+  `content` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '评论的详情',
+  `created_at` datetime NULL DEFAULT NULL COMMENT '评论的创建时间',
+  `updated_at` datetime NULL DEFAULT NULL COMMENT '评论的更新时间',
+  `status` enum('pending','approved','rejected') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT 'pending' COMMENT '评论的状态 默认pending',
+  `like_count` int UNSIGNED NULL DEFAULT 0 COMMENT '评论被喜欢的数量',
+  `reply_count` int UNSIGNED NULL DEFAULT 0 COMMENT '评论的被回复数量',
   PRIMARY KEY (`comment_id`, `article_id`, `user_id`) USING BTREE,
   INDEX `article_id`(`article_id` ASC) USING BTREE,
   INDEX `user_id`(`user_id` ASC) USING BTREE,
@@ -147,7 +147,7 @@ CREATE TABLE `files_info`  (
   `status` enum('active','inactive','deleted') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '文件的状态',
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '文件的描述',
   PRIMARY KEY (`file_id` DESC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for note_tags
@@ -282,7 +282,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getAllNotesWithByCondition`;
 delimiter ;;
 CREATE FUNCTION `getAllNotesWithByCondition`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -294,7 +294,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getAllNotesWithTags_JSON`;
 delimiter ;;
 CREATE FUNCTION `getAllNotesWithTags_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -306,7 +306,7 @@ delimiter ;
 DROP PROCEDURE IF EXISTS `getNoteCounts_JSON`;
 delimiter ;;
 CREATE PROCEDURE `getNoteCounts_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
 
 ;;
 delimiter ;
@@ -317,7 +317,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getNotesWithTagsByCategory_JSON`;
 delimiter ;;
 CREATE FUNCTION `getNotesWithTagsByCategory_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -329,7 +329,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getNotesWithTagsByDateRange_JSON`;
 delimiter ;;
 CREATE FUNCTION `getNotesWithTagsByDateRange_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -341,7 +341,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getNotesWithTagsByName_JSON`;
 delimiter ;;
 CREATE FUNCTION `getNotesWithTagsByName_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -353,7 +353,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getNotesWithTagsByTag_JSON`;
 delimiter ;;
 CREATE FUNCTION `getNotesWithTagsByTag_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -365,7 +365,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getNotesWithTags_JSON`;
 delimiter ;;
 CREATE FUNCTION `getNotesWithTags_JSON`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -377,7 +377,7 @@ delimiter ;
 DROP FUNCTION IF EXISTS `getNotesWithTags_JSONByPageLimit`;
 delimiter ;;
 CREATE FUNCTION `getNotesWithTags_JSONByPageLimit`()
-  READS SQL DATA
+  READS SQL DATA 
   DETERMINISTIC
 
 ;;
@@ -404,20 +404,6 @@ delimiter ;
 -- ----------------------------
 -- Triggers structure for table comments
 -- ----------------------------
-DROP TRIGGER IF EXISTS `update_comment_datetime`;
-delimiter ;;
-CREATE TRIGGER `update_comment_datetime` BEFORE UPDATE ON `comments` FOR EACH ROW IF OLD.content <> NEW.content THEN
-    SET NEW.updated_at = NOW();
-ELSE
-    -- 如果仅更新其他字段（如状态），不更新 updated_at
-    SET NEW.updated_at = OLD.updated_at;  -- 保持原来的时间戳
-END IF
-;;
-delimiter ;
-
--- ----------------------------
--- Triggers structure for table comments
--- ----------------------------
 DROP TRIGGER IF EXISTS `create_comment_datetime`;
 delimiter ;;
 CREATE TRIGGER `create_comment_datetime` BEFORE INSERT ON `comments` FOR EACH ROW SET NEW.created_at = NOW(),NEW.updated_at = NOW()
@@ -427,17 +413,14 @@ delimiter ;
 -- ----------------------------
 -- Triggers structure for table comments
 -- ----------------------------
-DROP TRIGGER IF EXISTS `update_comment_count_on_delete`;
+DROP TRIGGER IF EXISTS `update_comment_datetime`;
 delimiter ;;
-CREATE TRIGGER `update_comment_count_on_delete` AFTER DELETE ON `comments` FOR EACH ROW BEGIN
-    -- 删除评论时，减少 notes 表中的 comment_count
-    UPDATE notes
-    SET comment_count = CASE
-        WHEN comment_count > 0 THEN comment_count - 1
-        ELSE 0
-    END
-    WHERE id = OLD.article_id;  -- 使用 OLD.article_id 确保删除的是原来关联的 article
-END
+CREATE TRIGGER `update_comment_datetime` BEFORE UPDATE ON `comments` FOR EACH ROW IF OLD.content <> NEW.content THEN
+    SET NEW.updated_at = NOW();
+ELSE
+    -- 如果仅更新其他字段（如状态），不更新 updated_at
+    SET NEW.updated_at = OLD.updated_at;  -- 保持原来的时间戳
+END IF
 ;;
 delimiter ;
 
@@ -463,6 +446,23 @@ CREATE TRIGGER `update_comment_count` AFTER UPDATE ON `comments` FOR EACH ROW BE
         END
         WHERE id = OLD.article_id;  -- 使用 OLD.article_id 确保删除的是原来关联的 article
     END IF;
+END
+;;
+delimiter ;
+
+-- ----------------------------
+-- Triggers structure for table comments
+-- ----------------------------
+DROP TRIGGER IF EXISTS `update_comment_count_on_delete`;
+delimiter ;;
+CREATE TRIGGER `update_comment_count_on_delete` AFTER DELETE ON `comments` FOR EACH ROW BEGIN
+    -- 删除评论时，减少 notes 表中的 comment_count
+    UPDATE notes
+    SET comment_count = CASE
+        WHEN comment_count > 0 THEN comment_count - 1
+        ELSE 0
+    END
+    WHERE id = OLD.article_id;  -- 使用 OLD.article_id 确保删除的是原来关联的 article
 END
 ;;
 delimiter ;

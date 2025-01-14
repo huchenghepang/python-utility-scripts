@@ -1,9 +1,8 @@
-import re
 import os
+import re
 
-
-def parse_sql_to_ts(sql_file, output_file):
-    # 提取文件名并确保输出文件后缀为 .d.ts
+def parse_sql_to_ts(sql_file, output_file, out_folder):
+    # 提取文件名并确保后缀为 .d.ts
     file_name = os.path.basename(output_file)
     if not file_name.endswith('.d.ts'):
         output_file = os.path.splitext(file_name)[0] + '.d.ts'
@@ -16,20 +15,19 @@ def parse_sql_to_ts(sql_file, output_file):
     field_pattern = r'^\s*`(\w+)`\s+(\w+.*?)(?:\((.*?)\))?(.*?COMMENT\s+\'(.*?)\')?,?'
 
     # 匹配主键的结构
-    primary_key_pattern = r"PRIMARY KEY\s*\(\s*`([^`]+)`\s*\)"
+    primary_key_pattern = r"PRIMARY KEY\s*\(\s*(.*?)\s*\)"
 
-    # 匹配NOT NULL 是存在的正则表达式
-    NOT_NULL_PATTERN = r'\bNOT NULL\b'
-    # 处理NOT NULL 如果有NOT NULL '‘ 没有则 ？
-    has_NOTNULL_str = ''
+    # 匹配到AUTO_INCREMENT 的正则表达式
+    AUTO_INCREMENT_PATTERN = r'\bAUTO_INCREMENT\b'
+    # 匹配 DEFAULT 的正则表达式
+    DEFAULT_PATTERN = r'\bDEFAULT\b'
 
-    # 是否必填
-    isRequired_str = True
+    # 匹配 NOT NULL AUTO_INCREMENT DEFAULT 的正则表达式
+    NOT_NULL_PATTERN = r'\bNOT NULL\b(?!.*\b(AUTO_INCREMENT|DEFAULT)\b)'
 
 
     # 记录所有的表名
     table_names = []
-    primary_key_field = ''
     matches = re.findall(table_pattern, sql_content, re.S)
     ts_interfaces = []
     ts_mysql2_interfaces = ['import { RowDataPacket } from "mysql2";']
@@ -37,105 +35,97 @@ def parse_sql_to_ts(sql_file, output_file):
     for table_name, fields in matches:
         # 转换表名为大驼峰命名
         ts_table_name = to_camel_case(table_name, capitalize=True)
-        print('1-'+fields)
 
         # 匹配主键
         primary_key_match = re.search(primary_key_pattern, fields)
-        if primary_key_match:
-            primary_key_field ='主键：' +primary_key_match.group(1)
-            print('2-'+primary_key_field)
-        else:
-            primary_key_field = '主键：无'
-
-
+        primary_key_field = primary_key_match.group(1) if primary_key_match else '无'
 
         # 记录表名
-        table_names.append(ts_table_name)
+        table_names.append(table_name)
 
-        ts_interface = f"export interface {ts_table_name} {{\n  // 源表名称: {table_name} - {primary_key_field}\n"
-        ts_mysql2_interface = f"export interface {ts_table_name} extends RowDataPacket {{\n  // 源表名称: {table_name} - {primary_key_field}\n"
+        ts_interface = f"export interface {ts_table_name} {{\n  // 源表名称: {table_name} - 主键: {primary_key_field}\n"
+        ts_mysql2_interface = f"export interface {ts_table_name} extends RowDataPacket {{\n  // 源表名称: {table_name} - 主键: {primary_key_field}\n"
 
         for line in fields.splitlines():
             line = line.strip()
             if line.startswith(('PRIMARY KEY', 'INDEX', 'CONSTRAINT')):
                 continue
 
-            # 使用正则表达式忽略大小写查找 NOT NULL
-            # 使用正则表达式忽略大小写查找 NOT NULL
-            if re.search(r'\bNOT NULL\b', line, re.IGNORECASE):
-                has_NOTNULL_str = ''
-                isRequired_str = True
-            else:
-                has_NOTNULL_str = '?'
-                isRequired_str = False
+            # 检查是都包含自增长字段
+            is_auto_increment = bool(re.search(AUTO_INCREMENT_PATTERN, line, re.IGNORECASE))
+            # 检查是否包含默认字段
+            is_default = bool(re.search(DEFAULT_PATTERN, line, re.IGNORECASE))
 
-
-
+            is_required = bool(re.search(NOT_NULL_PATTERN, line, re.IGNORECASE))
             field_match = re.match(field_pattern, line)
             if field_match:
-                field_name, field_type, enum_values, other, comment = field_match.groups()
-
-
-
-
-
-                # 处理字段类型
-                if 'enum' in field_type.lower() and enum_values:
-                    ts_type = parse_enum_type(enum_values)
-                else:
-                    ts_type = map_sql_type_to_ts_type(field_type)
-
-
-                # 字段注释
+                field_name, field_type, enum_values, _, comment = field_match.groups()
+                ts_type = parse_enum_type(enum_values) if 'enum' in field_type.lower() and enum_values else map_sql_type_to_ts_type(field_type)
+                field_name += '' if is_required else '?'
+                # 自增长描述注释
+                auto_increment_str = '- 自增长' if is_auto_increment else ''
+                # 默认描述注释
+                default_str = '- 默认' if is_default else ''
+                # 默认描述注释
                 comment_text = f"{comment.strip()}" if comment else "无描述"
-
-                # 为空时 注释字段表明 是必填的
-                if isRequired_str == True:
-                    comment_text = f"{comment_text} 必填"
-                else:
-                    comment_text = f"{comment_text} 可选"
-
-
-                ts_comment = f"/** {comment_text} */"
-
-
-                field_name += has_NOTNULL_str
-
-
-                # 生成字段定义
+                ts_comment = f"/** {comment_text} {'必填' if is_required else '可选'} {auto_increment_str} {default_str} */"
                 ts_interface += f"  {ts_comment}\n  {field_name}: {ts_type};\n"
                 ts_mysql2_interface += f"  {ts_comment}\n  {field_name}: {ts_type};\n"
 
         ts_interface += "}\n"
-
-        # 定义所有表名类型  Tables
-
-
-
         ts_mysql2_interface += "}\n"
 
         ts_interfaces.append(ts_interface)
         ts_mysql2_interfaces.append(ts_mysql2_interface)
 
-    tables_str = 'export type Tables = ' + ' | '.join(f"'{table}'" for table in table_names) + ';\n'
+    tables_str = format_tables_str(table_names)
 
-    ts_interfaces.insert(0,tables_str)
-    ts_mysql2_interfaces.insert(1,tables_str)
+    ts_interfaces.insert(0, tables_str)
+    ts_mysql2_interfaces.insert(1, tables_str)
+
+    # 确保输出目录存在
+    create_file_folder(out_folder)
+
     # 写入主接口文件
-    with open(output_file, 'w', encoding='utf-8') as f:
-
+    output_path = os.path.join(out_folder, output_file)
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(ts_interfaces))
 
     # 写入 MySQL2 接口文件
     ts_mysql2_file = output_file.replace('.d.ts', '_mysql2.d.ts')
-    with open(ts_mysql2_file, 'w', encoding='utf-8') as f:
+    mysql2_output_path = os.path.join(out_folder, ts_mysql2_file)
+    with open(mysql2_output_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(ts_mysql2_interfaces))
 
-    print(f"TypeScript interfaces have been written to {output_file}")
-    print(f"MySQL2 interfaces have been written to {ts_mysql2_file}")
-    print(f"typescript 接口已经写入到 {output_file}")
-    print(f"typescript mysql2接口已经写入到 {ts_mysql2_file}")
+    print(f"TypeScript interfaces have been written to {output_path}")
+    print(f"MySQL2 interfaces have been written to {mysql2_output_path}")
 
+
+def create_file_folder(folder_path):
+    # 创建文件夹（如果不存在）
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+        print(f"Folder '{folder_path}' created.")
+    else:
+        print(f"Folder '{folder_path}' already exists.")
+
+def format_tables_str(table_names, max_line_length=80):
+    formatted_lines = []
+    current_line = "export type Tables = "
+    for table in table_names:
+        table_entry = f"'{table}' | "
+        if len(current_line) + len(table_entry) > max_line_length:
+            # 如果当前行的长度超出限制，保存当前行并换行
+            formatted_lines.append(current_line.strip())
+            current_line = "  " + table_entry  # 下一行缩进两个空格
+        else:
+            current_line += table_entry
+
+    # 添加最后一行
+    formatted_lines.append(current_line.rstrip('| ').strip() + ';')
+
+    # 合并为最终结果
+    return '\n'.join(formatted_lines)
 
 def map_sql_type_to_ts_type(sql_type):
     sql_type = sql_type.lower()
@@ -144,7 +134,7 @@ def map_sql_type_to_ts_type(sql_type):
     if 'varchar' in sql_type or 'text' in sql_type or 'char' in sql_type:
         return 'string'
     if 'datetime' in sql_type or 'timestamp' in sql_type:
-        return 'Date'
+        return 'string'
     if 'float' in sql_type or 'double' in sql_type or 'decimal' in sql_type:
         return 'number'
     if 'boolean' in sql_type or 'bit' in sql_type:
@@ -154,22 +144,20 @@ def map_sql_type_to_ts_type(sql_type):
 
 def parse_enum_type(enum_values):
     values = enum_values.split(',')
-    enum_values = [value.strip().strip("'") for value in values]
-    return ' | '.join(f"'{value}'" for value in enum_values)
+    return ' | '.join(["'{}'".format(value.strip().strip("'")) for value in values])
 
 
 def to_camel_case(name, capitalize=False):
     parts = name.split('_')
-    if capitalize:
-        return ''.join(word.capitalize() for word in parts)
-    return parts[0].lower() + ''.join(word.capitalize() for word in parts[1:])
+    return ''.join(word.capitalize() for word in parts) if capitalize else parts[0].lower() + ''.join(word.capitalize() for word in parts[1:])
 
 
 # 示例用法
 sql_file = 'navicat_export.sql'
-output_file = 'interfaces.ts'
+output_file = 'output/interfaces.ts'
 
 if os.path.exists(sql_file):
-    parse_sql_to_ts(sql_file, output_file)
+    out_folder = os.path.dirname(output_file)  # 提取 output 文件夹
+    parse_sql_to_ts(sql_file, os.path.basename(output_file), out_folder)
 else:
     print(f"SQL file '{sql_file}' not found.")

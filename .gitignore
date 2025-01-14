@@ -135,6 +135,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+script/解析域名地址
 
 # Spyder project settings
 .spyderproject
