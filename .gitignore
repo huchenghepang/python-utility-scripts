@@ -171,3 +171,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 /script/文件分片/input.pdf
+/script/src/
+/script/generate_api_and_types/swagger.json
+/script/generate_api_and_types/src/
+
+/.idea/
+
+/script/iconfont_icon_extracted_as_type/**/*
