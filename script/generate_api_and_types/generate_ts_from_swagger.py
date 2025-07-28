@@ -1,7 +1,8 @@
 import json
-from pathlib import Path
-from typing import Dict, Any
 import os
+from pathlib import Path
+from typing import Any, Dict
+
 # 映射 JSON Schema 类型到 TypeScript 类型
 type_map = {
     "string": "string",
