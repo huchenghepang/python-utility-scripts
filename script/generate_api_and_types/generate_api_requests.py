@@ -37,8 +37,10 @@ TS_BASIC_TYPES = {
 
 # 查询参数的类型数组 之后遍历生成到一个文件，并且在顶部导入对应的query参数
 global_query_params_set = set()
+global_query_imports_set = set()
 # body对应的data参数，之后如果是不为空的话，会在顶部导入对应的请求参数DTO
 global_body_params_set = set()
+
 
 
 # 保存接口信息的字典
@@ -54,53 +56,69 @@ def map_type(type_str: str) -> str:
     return type_map.get(type_str, type_str)
 
 
-def generate_ts_interface_from_query_params(query_params: list[dict], query_params_name: str = "QueryParams") -> str:
+def generate_ts_interface_from_query_params(
+    query_params: list[dict], 
+    query_params_name: str = "QueryParams", 
+    swagger_data: dict = None,
+    imports_collector: set = None
+) -> tuple[str, set]:
     """
-    生成 TypeScript 接口，表示所有查询参数，处理类型、必填、描述信息。
-    :param query_params: Swagger 参数列表，每个元素是 dict，包含 name/schema/required/description 等
-    :param query_params_name: 接口名称，默认 QueryParams
-    :return: TypeScript 接口定义字符串
+    生成TypeScript接口并收集所有需要的导入
+    
+    :return: (生成的接口代码, 需要导入的类型集合)
     """
-    # 类型映射关系
-    type_map = {
-        "string": "string",
-        "number": "number",
-        "integer": "number",
-        "boolean": "boolean",
-        "array": "Array<any>",
-        "object": "Record<string, any>",
-    }
-
-    def get_type(param_schema: dict) -> str:
-        """
-        将 Swagger 的 schema 映射为 TypeScript 类型
-        """
-        param_type = param_schema.get("type")
-        if param_type == "array":
-            item_type = param_schema.get("items", {}).get("type", "any")
-            return f"Array<{type_map.get(item_type, item_type)}>"
-        elif param_type == "object":
+    def resolve_ref(ref_path: str) -> dict:
+        parts = [p for p in ref_path.split("/") if p != "#"]
+        current = swagger_data
+        for part in parts:
+            current = current.get(part, {})
+        return current
+    def get_ts_type(schema: dict) -> str:
+        nonlocal imports
+        if "$ref" in schema:
+            ref_name = schema["$ref"].split("/")[-1]
+            if imports is not None:
+                imports.add(ref_name)
+            return ref_name
+        elif schema.get("type") == "array":
+            items = schema.get("items", {})
+            item_type = get_ts_type(items)
+            return f"{item_type}[]"
+        elif schema.get("type") == "object":
+            props = schema.get("properties", {})
+            if props:
+                prop_lines = []
+                for prop_name, prop_schema in props.items():
+                    prop_type = get_ts_type(prop_schema)
+                    prop_lines.append(f"{prop_name}: {prop_type};")
+                return "{\n    " + "\n    ".join(prop_lines) + "\n  }"
             return "Record<string, any>"
         else:
-            return type_map.get(param_type, "any")
+            return type_map.get(schema.get("type", "any"), "any")
 
-    # 拼接字段定义
+    imports = set()
     lines = [f"export interface {query_params_name} {{"]
-    for p in query_params:
-        name = p["name"]
-        required = "" if p.get("required", False) else "?"
-        ts_type = get_type(p.get("schema", {}))
-        description = p.get("description", "")
-        comment = f"  /** {description} */" if description else ""
-        field = f"  {name}{required}: {ts_type};"
-        if comment:
-            lines.append(comment)
-        lines.append(field)
+    
+    for param in query_params:
+        name = param["name"]
+        required = "" if param.get("required", False) else "?"
+        schema = param.get("schema", {})
+        
+        ts_type = get_ts_type(schema)
+        if imports_collector is not None:
+            print("存在")
+            imports.update(imports_collector)
+        
+        if schema.get("nullable", False):
+            ts_type = f"{ts_type} | null"
+        
+        desc = param.get("description", "")
+        if desc:
+            lines.append(f"  /** {desc} */")
+        lines.append(f"  {name}{required}: {ts_type};")
+    
     lines.append("}")
-
-    return "\n".join(lines)
-
-
+    return "\n".join(lines), imports
 
 
 
@@ -168,11 +186,37 @@ def generate_common_query_params_file(global_query_params_set, output_path: str)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
+        # 写入外部导入的dto
+        f.write(generate_import_common_query_params_statement(global_query_imports_set))
+        f.write("\n")
         for param in sorted(global_query_params_set):
             f.write(f"{param} \n")
 
     print(f"✅ 通用 query 参数定义文件已生成: {output_path}")
 
+def generate_import_common_query_params_statement(imports: set, import_path: str = './output.d.ts') -> str:
+    """
+    生成完整的import语句
+    
+    :param imports: 需要导入的类型集合
+    :param import_path: 导入路径
+    :return: 格式化后的import语句
+    """
+    if not imports:
+        return ""
+    
+    # 过滤掉基本类型
+    filtered_imports = sorted([t for t in imports if t not in TS_BASIC_TYPES])
+    
+    if not filtered_imports:
+        return ""
+    
+    # 自动处理分多行导入（超过3个类型时）
+    if len(filtered_imports) > 3:
+        imports_str = "\n  " + ",\n  ".join(filtered_imports) + "\n"
+        return f"import type {{\n{imports_str}}} from '{import_path}';"
+    else:
+        return f"import type {{ {', '.join(filtered_imports)} }} from '{import_path}';"
 
 
 def generate_ts_type_from_query_params(query_params,query_name:str = "QueryParams"):
@@ -233,15 +277,16 @@ def generate_request_function(path:str, method:str, operation_id:str,
 
     # 生成 query 和 path 参数的处理代码
     # query参数类型
-
     # Query参数类型名称
     query_params_type_name = f"{req_function_name}Query".capitalize()
-    query_code = generate_ts_interface_from_query_params(query_params,query_params_type_name) if (query_params and len(query_params)>0) else None
+    query_code,query_imports  = generate_ts_interface_from_query_params(query_params,query_params_type_name) if (query_params and len(query_params)>0) else (None,set())
     path_code = ', '.join([f"{param}: string" for param in path_params]) if (path_params and len(path_params)>0) else ""
     if query_code:
         api_info[origin_text_tag]["query_params"].add(query_params_type_name)
         global_query_params_set.add(query_code)
-    # 生成 body 参数处理代码
+    for import_item in query_imports:
+        global_query_imports_set.add(import_item)
+    # 生成 body 
     body_temp_type = ""
     body_code = ""
     if body_ref:

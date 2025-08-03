@@ -43,17 +43,15 @@ def generate_jsdoc(prop: Dict[str, Any], indent: str = "  ") -> str:
 
 def parse_property(name: str, prop: Dict[str, Any], required_fields: list) -> str:
     ts_type = "any"
+    is_nullable = prop.get("nullable", False)  # 🆕 检查 nullable 标志
 
     # 🧠 枚举类型优先处理
     if "enum" in prop:
         enum_values = prop["enum"]
-        # 用 TypeScript 联合类型表示 enum
         ts_type = " | ".join(json.dumps(v, ensure_ascii=False) for v in enum_values)
-
     elif "$ref" in prop:
         ref_name = prop["$ref"].split("/")[-1]
         ts_type = ref_name
-
     elif prop.get("type") == "array":
         items = prop.get("items", {})
         if "$ref" in items:
@@ -62,28 +60,23 @@ def parse_property(name: str, prop: Dict[str, Any], required_fields: list) -> st
         else:
             item_type = type_map.get(items.get("type", "any"), "any")
             ts_type = f"{item_type}[]"
-
     elif prop.get("type") == "object":
         additional_props = prop.get("additionalProperties")
         if additional_props:
-            if (
-                additional_props.get("type") == "array"
-                and additional_props.get("items", {}).get("type") == "string"
-            ):
-                ts_type = "string[]"
-            else:
-                val_type = type_map.get(additional_props.get("type", "any"), "any")
-                ts_type = f"{{ [key: string]: {val_type} }}"
+            val_type = type_map.get(additional_props.get("type", "any"), "any")
+            ts_type = f"{{ [key: string]: {val_type} }}"
         else:
             ts_type = "Record<string, any>"
-
     else:
         ts_type = type_map.get(prop.get("type", "any"), "any")
 
-    is_required = name in required_fields
-    jsdoc = generate_jsdoc(prop,indent="  ")
-    return f"{jsdoc}\n  {name}{'' if is_required else '?'}: {ts_type};"
+    # 🆕 处理 nullable：如果是可空类型，添加 null 到联合类型
+    if is_nullable:
+        ts_type = f"{ts_type} | null"
 
+    is_required = name in required_fields
+    jsdoc = generate_jsdoc(prop, indent="  ")
+    return f"{jsdoc}\n  {name}{'' if is_required else '?'}: {ts_type};"
 
 
 def convert_schema_to_ts(name: str, schema: Dict[str, Any]) -> str:
